@@ -1,4 +1,0 @@
-﻿numpy==2.5.3
-pillow==12.3.0
-pyfastnoiselite==0.0.7
-pyflwdir==0.5.12
