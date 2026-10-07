@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import deque
+
 import hashlib
 from pathlib import Path
 import unittest
@@ -16,6 +18,7 @@ from Sources.Procedural.landform import (
     CoastEdge,
     LandformConfig,
     LandformMode,
+    derive_landform_macro_parameters,
     derive_land_water_masks,
     generate_landform,
 )
@@ -23,6 +26,8 @@ from Sources.Procedural.terrain import LayeredTerrainConfig, generate_layered_te
 
 
 class LandformTests(unittest.TestCase):
+    REPRESENTATIVE_SEEDS = (1001, 2002, 3003, 4004, 5005, 12345)
+
     def setUp(self) -> None:
         self.island_config = LandformConfig(
             seed=12345,
@@ -43,6 +48,86 @@ class LandformTests(unittest.TestCase):
         output_path = self.output_directory / name
         self.addCleanup(output_path.unlink, missing_ok=True)
         return output_path
+
+    @staticmethod
+    def _land_component_count(land_mask: np.ndarray) -> int:
+        remaining = land_mask.copy()
+        components = 0
+        height, width = remaining.shape
+        for start_y, start_x in np.argwhere(remaining):
+            if not remaining[start_y, start_x]:
+                continue
+            components += 1
+            remaining[start_y, start_x] = False
+            queue = deque([(int(start_y), int(start_x))])
+            while queue:
+                y, x = queue.popleft()
+                for neighbor_y, neighbor_x in (
+                    (y - 1, x),
+                    (y + 1, x),
+                    (y, x - 1),
+                    (y, x + 1),
+                ):
+                    if (
+                        0 <= neighbor_y < height
+                        and 0 <= neighbor_x < width
+                        and remaining[neighbor_y, neighbor_x]
+                    ):
+                        remaining[neighbor_y, neighbor_x] = False
+                        queue.append((neighbor_y, neighbor_x))
+        return components
+
+    def test_macro_parameters_are_deterministic_and_vary_by_seed(self) -> None:
+        for mode in LandformMode:
+            with self.subTest(mode=mode):
+                parameter_sets = []
+                for seed in self.REPRESENTATIVE_SEEDS:
+                    config = LandformConfig(seed=seed, mode=mode)
+                    first = derive_landform_macro_parameters(config)
+                    second = derive_landform_macro_parameters(config)
+                    self.assertEqual(first, second)
+                    parameter_sets.append(first)
+                self.assertEqual(len(set(parameter_sets)), len(parameter_sets))
+
+    def test_representative_islands_are_connected_with_water_boundaries(self) -> None:
+        for seed in self.REPRESENTATIVE_SEEDS:
+            with self.subTest(seed=seed):
+                terrain = generate_landform(
+                    LandformConfig(
+                        seed=seed, mode=LandformMode.ISLAND, width=512, height=512
+                    )
+                )
+                land, _ = derive_land_water_masks(terrain)
+                boundary = np.concatenate(
+                    (land[0, :], land[-1, :], land[1:-1, 0], land[1:-1, -1])
+                )
+                self.assertFalse(np.any(boundary))
+                self.assertEqual(self._land_component_count(land), 1)
+                self.assertGreaterEqual(float(land.mean()), 0.25)
+                self.assertLessEqual(float(land.mean()), 0.60)
+                self.assertEqual(terrain.dtype, np.dtype(np.float32))
+                self.assertTrue(np.isfinite(terrain).all())
+
+    def test_representative_coasts_have_one_mainland_and_submerged_edge(self) -> None:
+        for seed in self.REPRESENTATIVE_SEEDS:
+            with self.subTest(seed=seed):
+                terrain = generate_landform(
+                    LandformConfig(
+                        seed=seed,
+                        mode=LandformMode.COAST,
+                        width=512,
+                        height=512,
+                        coast_edge=CoastEdge.EAST,
+                    )
+                )
+                land, _ = derive_land_water_masks(terrain)
+                self.assertFalse(np.any(land[:, -1]))
+                self.assertTrue(np.any(land[:, 0]))
+                self.assertEqual(self._land_component_count(land), 1)
+                self.assertGreaterEqual(float(land.mean()), 0.45)
+                self.assertLessEqual(float(land.mean()), 0.85)
+                self.assertEqual(terrain.dtype, np.dtype(np.float32))
+                self.assertTrue(np.isfinite(terrain).all())
 
     def test_island_is_exactly_deterministic(self) -> None:
         first = generate_landform(self.island_config)
@@ -92,8 +177,9 @@ class LandformTests(unittest.TestCase):
         )
 
         self.assertTrue(np.all(terrain[:, -1] < 0.0))
+        macro = derive_landform_macro_parameters(self.coast_config)
         np.testing.assert_array_equal(
-            terrain[:, 0], base[:, 0] + np.float32(self.coast_config.land_bias)
+            terrain[:, 0], base[:, 0] + np.float32(macro.land_bias)
         )
         self.assertTrue(np.any(terrain[:, 0] > 0.0))
 
@@ -143,7 +229,7 @@ class LandformTests(unittest.TestCase):
         digest = hashlib.sha256(terrain.tobytes(order="C")).hexdigest()
         self.assertEqual(
             digest,
-            "1f12c7d388065e6cf02690a5b19b4c07105508227882316599096e6d0a95469f",
+            "a385ea72f06376647fcbba8ec63253c57fe9afb46b1ae613017b62a4494d4fb1",
         )
 
     def test_coast_reference_digest(self) -> None:
@@ -151,7 +237,7 @@ class LandformTests(unittest.TestCase):
         digest = hashlib.sha256(terrain.tobytes(order="C")).hexdigest()
         self.assertEqual(
             digest,
-            "98f34c6f2cce09cfc1ffbb909aa20615afbe6bb3350d68819c867ce00c8948a3",
+            "2b26a91539bf7012d9763e4727a5f3a288e5627ec0e6eb1b78e981abc618d906",
         )
 
     def test_landform_preview_png_is_deterministic(self) -> None:

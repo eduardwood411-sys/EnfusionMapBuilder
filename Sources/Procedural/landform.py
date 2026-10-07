@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 import math
@@ -16,6 +17,7 @@ from Sources.Procedural.terrain import (
 
 
 SEA_LEVEL = np.float32(0.0)
+_UINT64_MASK = (1 << 64) - 1
 
 
 class LandformMode(str, Enum):
@@ -28,6 +30,21 @@ class CoastEdge(str, Enum):
     WEST = "west"
     NORTH = "north"
     SOUTH = "south"
+
+
+@dataclass(frozen=True, slots=True)
+class LandformMacroParameters:
+    """Seed-derived controls used by the v1 island and coast falloff fields."""
+
+    land_bias: float
+    island_radius_x: float
+    island_radius_y: float
+    island_falloff_start: float
+    island_center_offset_x: float
+    island_center_offset_y: float
+    coast_falloff_start: float
+    coast_transition_width: float
+    coast_directional_asymmetry: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +105,73 @@ class LandformConfig:
             )
 
 
+def _seed_float(base_seed: int, stream: int) -> float:
+    """Map a signed seed and stream number to a stable float in [0, 1]."""
+
+    value = (
+        (base_seed & _UINT64_MASK)
+        + 0x9E3779B97F4A7C15 * (stream + 1)
+    ) & _UINT64_MASK
+    value = ((value ^ (value >> 30)) * 0xBF58476D1CE4E5B9) & _UINT64_MASK
+    value = ((value ^ (value >> 27)) * 0x94D049BB133111EB) & _UINT64_MASK
+    value ^= value >> 31
+    return ((value >> 40) & 0xFFFFFF) / float(0xFFFFFF)
+
+
+def _seed_range(base_seed: int, stream: int, low: float, high: float) -> float:
+    return low + (high - low) * _seed_float(base_seed, stream)
+
+
+def derive_landform_macro_parameters(
+    config: LandformConfig,
+) -> LandformMacroParameters:
+    """Derive conservative macro variation without using random global state.
+
+    The ranges are offsets from the v1 configuration, so its public shaping
+    controls remain useful. With the default configuration, island radii are
+    0.86--0.94 and 0.84--0.94, island falloff starts are 0.68--0.80,
+    land bias is 0.30--0.39, and center offsets are -0.05--0.05. Coast
+    falloff starts are 0.50--0.68, transition widths are 0.22--0.30, and
+    directional asymmetry is -0.06--0.06.
+    """
+
+    seed = config.seed
+    land_bias = config.land_bias + _seed_range(seed, 0, 0.0, 0.09)
+    # Retain the boundary guarantee even for a non-default but valid config.
+    land_bias = min(land_bias, config.falloff_depth - 1.000001)
+
+    center_x = _seed_range(seed, 4, -0.05, 0.05)
+    center_y = _seed_range(seed, 5, -0.05, 0.05)
+    radius_x = config.island_radius_x + _seed_range(seed, 1, -0.12, -0.04)
+    radius_y = config.island_radius_y + _seed_range(seed, 2, -0.08, 0.02)
+    radius_x = max(0.05, min(radius_x, 1.0 - abs(center_x)))
+    radius_y = max(0.05, min(radius_y, 1.0 - abs(center_y)))
+    island_start = config.island_falloff_start + _seed_range(
+        seed, 3, 0.0, 0.12
+    )
+    island_start = max(0.0, min(island_start, config.island_falloff_end - 0.05))
+
+    coast_start = config.coast_falloff_start + _seed_range(
+        seed, 6, -0.15, 0.03
+    )
+    v1_transition_width = config.coast_falloff_end - config.coast_falloff_start
+    coast_width = v1_transition_width + _seed_range(seed, 7, -0.13, -0.05)
+    coast_start = max(0.0, min(coast_start, 0.95))
+    coast_width = max(0.05, min(coast_width, 1.0 - coast_start))
+
+    return LandformMacroParameters(
+        land_bias=land_bias,
+        island_radius_x=radius_x,
+        island_radius_y=radius_y,
+        island_falloff_start=island_start,
+        island_center_offset_x=center_x,
+        island_center_offset_y=center_y,
+        coast_falloff_start=coast_start,
+        coast_transition_width=coast_width,
+        coast_directional_asymmetry=_seed_range(seed, 8, -0.06, 0.06),
+    )
+
+
 def _smoothstep(values: Float32Array, start: float, end: float) -> Float32Array:
     start_value = np.float32(start)
     extent = np.float32(end - start)
@@ -95,35 +179,102 @@ def _smoothstep(values: Float32Array, start: float, end: float) -> Float32Array:
     return progress * progress * (np.float32(3.0) - np.float32(2.0) * progress)
 
 
-def _island_falloff(config: LandformConfig) -> Float32Array:
+def _island_falloff(
+    config: LandformConfig, macro: LandformMacroParameters
+) -> Float32Array:
     x = np.linspace(-1.0, 1.0, config.width, dtype=np.float32)
     y = np.linspace(-1.0, 1.0, config.height, dtype=np.float32)
-    normalized_x = x / np.float32(config.island_radius_x)
-    normalized_y = y / np.float32(config.island_radius_y)
+    normalized_x = (
+        x - np.float32(macro.island_center_offset_x)
+    ) / np.float32(macro.island_radius_x)
+    normalized_y = (
+        y - np.float32(macro.island_center_offset_y)
+    ) / np.float32(macro.island_radius_y)
     distance = np.sqrt(
         normalized_x[np.newaxis, :] ** 2 + normalized_y[:, np.newaxis] ** 2
     )
     return _smoothstep(
-        distance, config.island_falloff_start, config.island_falloff_end
+        distance, macro.island_falloff_start, config.island_falloff_end
     )
 
 
-def _coast_falloff(config: LandformConfig) -> Float32Array:
+def _coast_falloff(
+    config: LandformConfig, macro: LandformMacroParameters
+) -> Float32Array:
     x = np.linspace(0.0, 1.0, config.width, dtype=np.float32)
     y = np.linspace(0.0, 1.0, config.height, dtype=np.float32)
 
     if config.coast_edge is CoastEdge.EAST:
         sea_progress = x[np.newaxis, :]
+        cross_progress = (np.float32(2.0) * y - np.float32(1.0))[:, np.newaxis]
     elif config.coast_edge is CoastEdge.WEST:
         sea_progress = (np.float32(1.0) - x)[np.newaxis, :]
+        cross_progress = (np.float32(2.0) * y - np.float32(1.0))[:, np.newaxis]
     elif config.coast_edge is CoastEdge.NORTH:
         sea_progress = (np.float32(1.0) - y)[:, np.newaxis]
+        cross_progress = (np.float32(2.0) * x - np.float32(1.0))[np.newaxis, :]
     else:
         sea_progress = y[:, np.newaxis]
+        cross_progress = (np.float32(2.0) * x - np.float32(1.0))[np.newaxis, :]
+
+    # Fade the slant to zero at the sea edge so that edge remains uniformly
+    # submerged, while seeds still change how the sea enters the map.
+    sea_progress = sea_progress + (
+        np.float32(macro.coast_directional_asymmetry)
+        * cross_progress
+        * (np.float32(1.0) - sea_progress)
+    )
+    coast_end = macro.coast_falloff_start + macro.coast_transition_width
 
     return _smoothstep(
-        sea_progress, config.coast_falloff_start, config.coast_falloff_end
+        sea_progress, macro.coast_falloff_start, coast_end
     )
+
+
+def _retain_dominant_landmass(values: Float32Array) -> Float32Array:
+    """Submerge detached land while preserving the largest 4-connected mass."""
+
+    land = values > SEA_LEVEL
+    unvisited = land.copy()
+    height, width = land.shape
+    largest_component: list[tuple[int, int]] = []
+
+    for start_y, start_x in np.argwhere(unvisited):
+        start_y = int(start_y)
+        start_x = int(start_x)
+        if not unvisited[start_y, start_x]:
+            continue
+        unvisited[start_y, start_x] = False
+        component = [(start_y, start_x)]
+        queue = deque(component)
+        while queue:
+            y, x = queue.popleft()
+            for neighbor_y, neighbor_x in (
+                (y - 1, x),
+                (y + 1, x),
+                (y, x - 1),
+                (y, x + 1),
+            ):
+                if (
+                    0 <= neighbor_y < height
+                    and 0 <= neighbor_x < width
+                    and unvisited[neighbor_y, neighbor_x]
+                ):
+                    unvisited[neighbor_y, neighbor_x] = False
+                    component.append((neighbor_y, neighbor_x))
+                    queue.append((neighbor_y, neighbor_x))
+        if len(component) > len(largest_component):
+            largest_component = component
+
+    if not largest_component or len(largest_component) == int(land.sum()):
+        return values
+
+    retained = np.zeros(land.shape, dtype=np.bool_)
+    component_y, component_x = zip(*largest_component)
+    retained[component_y, component_x] = True
+    result = values.copy()
+    result[land & ~retained] = np.float32(-1e-6)
+    return result
 
 
 def shape_landform(base_terrain: Float32Array, config: LandformConfig) -> Float32Array:
@@ -137,17 +288,19 @@ def shape_landform(base_terrain: Float32Array, config: LandformConfig) -> Float3
     if not np.isfinite(values).all():
         raise ValueError("base terrain must contain only finite values")
 
+    macro = derive_landform_macro_parameters(config)
     if config.mode is LandformMode.ISLAND:
-        falloff = _island_falloff(config)
+        falloff = _island_falloff(config, macro)
     else:
-        falloff = _coast_falloff(config)
+        falloff = _coast_falloff(config, macro)
 
     shaped = (
         values
-        + np.float32(config.land_bias)
+        + np.float32(macro.land_bias)
         - falloff * np.float32(config.falloff_depth)
     )
-    return np.ascontiguousarray(shaped, dtype=np.float32)
+    shaped = np.ascontiguousarray(shaped, dtype=np.float32)
+    return np.ascontiguousarray(_retain_dominant_landmass(shaped), dtype=np.float32)
 
 
 def generate_landform(config: LandformConfig) -> Float32Array:
