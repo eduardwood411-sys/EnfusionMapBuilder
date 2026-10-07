@@ -23,6 +23,8 @@ Before implementing a substantial feature:
 5. Test the best candidate on a small example.
 6. Write a custom implementation only when necessary.
 
+Before implementing terrain synthesis algorithms, evaluate an existing terrain backend first. The default production approach is integration with a mature terrain tool or library, not development of a custom high-quality terrain synthesis engine.
+
 Relevant ecosystems include:
 - Enfusion Workbench and Arma Reforger tools
 - GDAL / OSGeo
@@ -36,16 +38,29 @@ Relevant ecosystems include:
 ## Architecture boundaries
 
 Sources/Procedural
-- Generates synthetic source worlds from seed and parameters.
+- Generates reproducible synthetic world plans and inputs from seed and parameters.
+- Does not imply custom terrain synthesis.
 
 Sources/RealWorld
 - Imports and normalizes real-world geographic data.
 
+World Planner
+- Defines semantic world intent, broad geographic composition, terrain-zone intent, desired regions and gameplay constraints.
+- Derives reproducible planning parameters from explicit seeds and inputs.
+- Does not reproduce the functions of a professional terrain synthesis package.
+
+Terrain Backend
+- Produces terrain data from World Planner inputs.
+- May integrate Gaea, another mature terrain tool or library, a scientific/open-source system, RealWorld DEM input or a minimal test/mock backend.
+- Must remain replaceable; Gaea is the current leading production candidate, not a mandatory or permanent dependency.
+- Backend-specific logic belongs in an optional backend/integration layer and must not leak into Core.
+
 WorldModel
 - Universal internal representation independent of data origin and target game.
+- Common representation for terrain from procedural backends and RealWorld sources.
 
 Core
-- Terrain
+- Terrain: backend-neutral metadata, elevation normalization, height ranges, masks, coordinate/resolution information, validation and WorldModel conversion; not a custom terrain generator
 - Hydrology
 - Biomes
 - Roads
@@ -114,7 +129,9 @@ Do not add paid services when a suitable free and reliable solution exists.
 Current MVP priority:
 
 seed + parameters
--> terrain
+-> world planning
+-> evaluated terrain backend
+-> backend-neutral terrain data in WorldModel
 -> coastline
 -> hydrology
 -> basic biomes
