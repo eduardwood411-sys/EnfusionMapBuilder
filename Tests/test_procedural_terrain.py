@@ -7,7 +7,13 @@ import unittest
 
 import numpy as np
 
-from Sources.Procedural.terrain import TerrainConfig, generate_terrain
+from Sources.Procedural.terrain import (
+    LayeredTerrainConfig,
+    TerrainConfig,
+    derive_layer_seed,
+    generate_layered_terrain,
+    generate_terrain,
+)
 
 
 class ProceduralTerrainTests(unittest.TestCase):
@@ -65,6 +71,52 @@ class ProceduralTerrainTests(unittest.TestCase):
             with self.subTest(arguments=arguments):
                 with self.assertRaises((TypeError, ValueError)):
                     TerrainConfig(**arguments)
+
+
+class LayeredTerrainTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.config = LayeredTerrainConfig(seed=12345, width=32, height=24)
+
+    def test_same_base_seed_produces_exactly_same_terrain(self) -> None:
+        first = generate_layered_terrain(self.config)
+        second = generate_layered_terrain(self.config)
+
+        self.assertTrue(np.array_equal(first, second))
+
+    def test_different_base_seed_changes_terrain(self) -> None:
+        first = generate_layered_terrain(self.config)
+        second = generate_layered_terrain(
+            LayeredTerrainConfig(seed=12346, width=32, height=24)
+        )
+
+        self.assertFalse(np.array_equal(first, second))
+
+    def test_shape_dtype_and_finite_values(self) -> None:
+        terrain = generate_layered_terrain(self.config)
+
+        self.assertEqual(terrain.shape, (24, 32))
+        self.assertEqual(terrain.dtype, np.dtype(np.float32))
+        self.assertTrue(terrain.flags.c_contiguous)
+        self.assertTrue(np.isfinite(terrain).all())
+
+    def test_layer_seed_derivation_is_deterministic_and_wrapped(self) -> None:
+        self.assertEqual(
+            [derive_layer_seed(12345, index) for index in range(3)],
+            [12345, 1_012_348, 2_012_378],
+        )
+        self.assertEqual(
+            [derive_layer_seed(2**31 - 1, index) for index in range(3)],
+            [2_147_483_647, -2_146_483_646, -2_145_483_616],
+        )
+
+    def test_layered_reference_terrain_digest(self) -> None:
+        terrain = generate_layered_terrain(self.config)
+        digest = hashlib.sha256(terrain.tobytes(order="C")).hexdigest()
+
+        self.assertEqual(
+            digest,
+            "6d3b39f2a57c854620a7bf7a58a79d4dd06ec5669b1756e3cf1aee47426b58b3",
+        )
 
 
 if __name__ == "__main__":

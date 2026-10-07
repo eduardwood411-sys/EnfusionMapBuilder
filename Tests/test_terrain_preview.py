@@ -12,7 +12,12 @@ from Frontends.CLI.terrain_preview import (
     save_preview_png,
     terrain_to_preview_pixels,
 )
-from Sources.Procedural.terrain import TerrainConfig, generate_terrain
+from Sources.Procedural.terrain import (
+    LayeredTerrainConfig,
+    TerrainConfig,
+    generate_layered_terrain,
+    generate_terrain,
+)
 
 
 class TerrainPreviewTests(unittest.TestCase):
@@ -42,6 +47,18 @@ class TerrainPreviewTests(unittest.TestCase):
 
         save_preview_png(self.terrain, first_path)
         save_preview_png(self.terrain.copy(), second_path)
+
+        self.assertEqual(first_path.read_bytes(), second_path.read_bytes())
+
+    def test_layered_preview_png_is_deterministic(self) -> None:
+        config = LayeredTerrainConfig(seed=12345, width=16, height=12)
+        first_terrain = generate_layered_terrain(config)
+        second_terrain = generate_layered_terrain(config)
+        first_path = self._temporary_output("_test_layered_preview_first.png")
+        second_path = self._temporary_output("_test_layered_preview_second.png")
+
+        save_preview_png(first_terrain, first_path)
+        save_preview_png(second_terrain, second_path)
 
         self.assertEqual(first_path.read_bytes(), second_path.read_bytes())
 

@@ -10,7 +10,12 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
-from Sources.Procedural.terrain import TerrainConfig, generate_terrain
+from Sources.Procedural.terrain import (
+    LayeredTerrainConfig,
+    TerrainConfig,
+    generate_layered_terrain,
+    generate_terrain,
+)
 
 
 DEFAULT_OUTPUT_DIRECTORY = Path("Projects/Synthetic_Test_01/Output")
@@ -51,6 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lacunarity", type=float, default=2.0)
     parser.add_argument("--gain", type=float, default=0.5)
     parser.add_argument(
+        "--layered",
+        action="store_true",
+        help="Use the fixed macro, secondary, and detail terrain layers.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         help="PNG path; defaults to the Synthetic_Test_01 Output directory.",
@@ -60,19 +70,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    config = TerrainConfig(
-        seed=args.seed,
-        width=args.width,
-        height=args.height,
-        frequency=args.frequency,
-        octaves=args.octaves,
-        lacunarity=args.lacunarity,
-        gain=args.gain,
-    )
-    terrain = generate_terrain(config)
-    output_path = args.output or (
-        DEFAULT_OUTPUT_DIRECTORY / f"terrain_seed_{config.seed}.png"
-    )
+    if args.layered:
+        config = LayeredTerrainConfig(
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+        )
+        terrain = generate_layered_terrain(config)
+        default_filename = f"terrain_seed_{config.seed}_layered.png"
+    else:
+        config = TerrainConfig(
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+            frequency=args.frequency,
+            octaves=args.octaves,
+            lacunarity=args.lacunarity,
+            gain=args.gain,
+        )
+        terrain = generate_terrain(config)
+        default_filename = f"terrain_seed_{config.seed}.png"
+
+    output_path = args.output or (DEFAULT_OUTPUT_DIRECTORY / default_filename)
     save_preview_png(terrain, output_path)
 
     print(f"Generated preview: {output_path}")

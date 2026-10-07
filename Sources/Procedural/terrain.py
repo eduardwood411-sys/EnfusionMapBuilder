@@ -14,6 +14,7 @@ Float32Array = NDArray[np.float32]
 
 _MIN_SEED = -(2**31)
 _MAX_SEED = 2**31 - 1
+_SEED_MODULUS = 2**32
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,55 @@ class TerrainConfig:
             raise ValueError("gain must be greater than or equal to zero")
 
 
+@dataclass(frozen=True, slots=True)
+class TerrainLayerConfig:
+    """Fixed parameters for one layer in the layered terrain baseline."""
+
+    name: str
+    frequency: float
+    octaves: int
+    lacunarity: float
+    gain: float
+    weight: float
+    seed_offset: int
+
+
+LAYERED_TERRAIN_LAYERS = (
+    TerrainLayerConfig("macro", 0.003, 2, 2.0, 0.40, 1.0, 0),
+    TerrainLayerConfig("secondary", 0.006, 2, 2.0, 0.40, 0.35, 1_000_003),
+    TerrainLayerConfig("detail", 0.010, 2, 2.0, 0.40, 0.15, 2_000_033),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LayeredTerrainConfig:
+    """Inputs for the fixed three-layer procedural terrain baseline."""
+
+    seed: int
+    width: int = 512
+    height: int = 512
+
+    def __post_init__(self) -> None:
+        # Reuse the established validation without changing the baseline API.
+        TerrainConfig(seed=self.seed, width=self.width, height=self.height)
+
+
+def derive_layer_seed(base_seed: int, layer_index: int) -> int:
+    """Add a fixed layer offset and wrap it into signed 32-bit range."""
+
+    TerrainConfig(seed=base_seed, width=1, height=1)
+    if isinstance(layer_index, bool) or not isinstance(layer_index, int):
+        raise TypeError("layer_index must be an integer")
+    if not 0 <= layer_index < len(LAYERED_TERRAIN_LAYERS):
+        raise ValueError("layer_index must identify one of the three terrain layers")
+
+    offset = LAYERED_TERRAIN_LAYERS[layer_index].seed_offset
+    unsigned_seed = (base_seed + offset) % _SEED_MODULUS
+    if unsigned_seed > _MAX_SEED:
+        return unsigned_seed - _SEED_MODULUS
+    return unsigned_seed
+
+
 def generate_terrain(config: TerrainConfig) -> Float32Array:
     """Generate a row-major float32 height raster for ``config``.
 
@@ -90,3 +140,32 @@ def generate_terrain(config: TerrainConfig) -> Float32Array:
     return np.ascontiguousarray(values, dtype=np.float32).reshape(
         config.height, config.width
     )
+
+
+def generate_layered_terrain(config: LayeredTerrainConfig) -> Float32Array:
+    """Generate the fixed macro, secondary, and detail weighted terrain."""
+
+    generated_layers = []
+    for layer_index, layer in enumerate(LAYERED_TERRAIN_LAYERS):
+        layer_config = TerrainConfig(
+            seed=derive_layer_seed(config.seed, layer_index),
+            width=config.width,
+            height=config.height,
+            frequency=layer.frequency,
+            octaves=layer.octaves,
+            lacunarity=layer.lacunarity,
+            gain=layer.gain,
+        )
+        generated_layers.append(generate_terrain(layer_config))
+
+    macro, secondary, detail = generated_layers
+    macro_config, secondary_config, detail_config = LAYERED_TERRAIN_LAYERS
+    total_weight = np.float32(
+        macro_config.weight + secondary_config.weight + detail_config.weight
+    )
+    combined = (
+        macro * np.float32(macro_config.weight)
+        + secondary * np.float32(secondary_config.weight)
+        + detail * np.float32(detail_config.weight)
+    ) / total_weight
+    return np.ascontiguousarray(combined, dtype=np.float32)
