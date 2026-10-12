@@ -1,159 +1,96 @@
 ﻿# AGENTS.md
 
-Instructions for AI coding agents working on Enfusion Map Builder.
+Practical instructions for Codex and other AI coding agents working on Enfusion Map Builder, aligned with Enfusion Map Builder Guidelines v1.3 and the research-first approach.
 
-## Project goal
+## Goal and priorities
 
-Enfusion Map Builder is a modular system for generating game worlds for Enfusion.
+Build a high-quality, reproducible, convenient and reusable process for creating game worlds for Enfusion. Success is measured by the resulting worlds and workflow, not the amount of custom code.
 
-Primary mode: deterministic procedural generation of original synthetic maps.
-Secondary mode: reconstruction of real territories from DEM, GIS, OSM and imagery.
+- Synthetic is the primary direction: original synthetic worlds. Depending on the chosen workflow, inputs may include a brief / text description, seed and parameters, references, images and masks, AI outputs, and configurations of external generators / terrain tools.
+- RealWorld is secondary: reconstruction of real territories. Prefer sources in this order: official current GIS → DEM/orthophoto → OSM/vector → historical/visual references.
+- Synthetic and RealWorld may use different pipelines, tools and data representations.
+- Ruhnu is a separate RealWorld production/test case; it must not determine Synthetic architecture.
+- Gameplay suitability takes priority over purely geological plausibility.
+- Final artistic composition, level design, gameplay routes and visual quality require human review.
 
-Ruhnu is a production map and test case, not the architecture of the generator.
+## Research before implementation
 
-## Main development rule
+For each substantial feature or automation task:
 
-Do not reinvent mature solutions.
+1. Define the required result, constraints and practical acceptance criteria.
+2. Search for existing solutions before designing custom code.
+3. Compare eligible free candidates by result quality, maturity, reliability, reproducibility, performance, integration/maintenance effort, automation potential and portability to future games. Assess gameplay suitability as part of result quality.
+4. Run a small practical test using a limited dataset or isolated test project. Record inputs, settings, results and limitations.
+5. Select the simplest workflow supported by that evidence.
+6. Integrate, configure or adapt existing tools.
+7. Write custom code only for a confirmed gap or demonstrated bottleneck that suitable existing solutions do not address.
 
-Before implementing a substantial feature:
-1. Search for existing reliable solutions.
-2. Prefer official Enfusion/Bohemia tools where appropriate.
-3. Check mature open-source libraries and GIS tools.
-4. Compare integration cost, maintenance, license and portability.
-5. Test the best candidate on a small example.
-6. Write a custom implementation only when necessary.
+Check relevant options rather than assuming a particular tool or stack:
 
-Before implementing terrain synthesis algorithms, evaluate an existing terrain backend first. The default production approach is integration with a mature terrain tool or library, not development of a custom high-quality terrain synthesis engine.
+- Official Bohemia Interactive / Enfusion / Workbench capabilities and documentation.
+- Workshop tools, GitHub projects and community workflows.
+- Mature terrain tools and established procedural terrain or hydrology libraries.
+- QGIS, GDAL / OSGeo, GRASS GIS and WhiteboxTools.
+- GeoPandas, Shapely, NumPy and SciPy.
+- OSM and other suitable geographic data sources.
+- AI, ChatGPT, ComfyUI and other suitable ready-made solutions.
 
-Relevant ecosystems include:
-- Enfusion Workbench and Arma Reforger tools
-- GDAL / OSGeo
-- QGIS
-- GRASS GIS
-- WhiteboxTools
-- GeoPandas / Shapely
-- NumPy / SciPy
-- established procedural terrain and hydrology libraries
+Verify current capabilities and record research sources and dates. Do not treat an earlier candidate assessment as a permanent decision. Explain significant dependencies and tradeoffs before introducing them. Free tools are a mandatory constraint for the current production workflow.
 
-## Architecture boundaries
+- Eligible options include open-source tools, freeware, Community/Free editions, built-in Enfusion/Workbench capabilities, free Workshop/GitHub solutions and free libraries.
+- Before selecting a free version, verify its actual license, commercial-use restrictions, export limits, resolution limits, automation limits, version compatibility and any other restrictions affecting the workflow.
+- Paid products may be researched as references or comparison targets, but must not become mandatory production pipeline dependencies unless the user explicitly changes this constraint.
+- Do not propose a paid solution as the primary path for a task that must be completed within the current free toolchain.
 
-Sources/Procedural
-- Generates reproducible synthetic world plans and inputs from seed and parameters.
-- Does not imply custom terrain synthesis.
+## Architecture is a hypothesis
 
-Sources/RealWorld
-- Imports and normalizes real-world geographic data.
+Enfusion Map Builder need not be one application or a predetermined set of modules. It may be a collection of configurations, integrations, small scripts, adapters and external tools.
 
-World Planner
-- Defines semantic world intent, broad geographic composition, terrain-zone intent, desired regions and gameplay constraints.
-- Derives reproducible planning parameters from explicit seeds and inputs.
-- Does not reproduce the functions of a professional terrain synthesis package.
+The previous Sources / World Planner / Terrain Backend / WorldModel / Core / Adapters scheme is a working hypothesis. Change it or use only useful parts when research and tests justify that choice. Do not preserve it solely for compatibility with early prototypes.
 
-Terrain Backend
-- Produces terrain data from World Planner inputs.
-- May integrate Gaea, another mature terrain tool or library, a scientific/open-source system, RealWorld DEM input or a minimal test/mock backend.
-- Must remain replaceable; Gaea is the current leading production candidate, not a mandatory or permanent dependency.
-- Backend-specific logic belongs in an optional backend/integration layer and must not leak into Core.
+Do not create WorldModel, Core, Hydrology, Biomes, Roads, Settlements, Vegetation, Asset Resolver or other modules merely because they appeared in the old architecture. Introduce shared representations and abstraction boundaries only when a tested workflow needs them. Document meaningful architectural decisions and their evidence.
 
-WorldModel
-- Universal internal representation independent of data origin and target game.
-- Common representation for terrain from procedural backends and RealWorld sources.
+No terrain tool, including Gaea, is a mandatory or preselected production backend. Choose candidates after current research and small tests. Do not develop a custom production terrain engine by default.
 
-Core
-- Terrain: backend-neutral metadata, elevation normalization, height ranges, masks, coordinate/resolution information, validation and WorldModel conversion; not a custom terrain generator
-- Hydrology
-- Biomes
-- Roads
-- Settlements
-- Vegetation
-- AssetResolver
-- Validation
+## Check built-in Reforger tools first
 
-Adapters/ArmaReforger
-- All Reforger-specific integration belongs here.
-- Workbench API
-- Enforce Script
-- prefab paths
-- FG/PG generators
-- Reforger terrain/material mappings
+Before writing Reforger automation, investigate and test relevant built-in World Editor / Workbench capabilities, Terrain Tool, Generators, Shape/Spline, Import Objects, SHP/CSV import and Workshop tools.
 
-Never place Reforger-specific prefab names, resource paths or APIs in Core.
+Use the supported workflow when it meets the requirements. Add scripts or adapters only for demonstrated gaps. If reusable game-independent code is needed, keep concrete Reforger prefab paths, resources and APIs in the relevant integration rather than imposing game-specific assumptions on it. This does not require creating Core or an adapter module in advance.
 
-Use semantic Core entities such as PineForest, ResidentialHouse or LocalDirtRoad.
-Translate them into concrete game assets only inside a game adapter.
+## Reproducibility and AI
 
-## Determinism
+GUI tools, manual intermediate steps and AI are acceptable when they provide a better reproducible workflow. Full automation is not a goal by itself. The goal is sufficient reproducibility of the selected production variant; not every workflow must have a seed.
 
-Procedural generation must be reproducible.
-
-- Explicitly pass or store seeds.
-- Store generation parameters.
-- Avoid hidden global randomness.
-- A repeated build with the same inputs should produce the same result where practical.
-- Nondeterministic AI output must not be the sole source of critical world geometry.
+- Store input provenance, tool versions, configurations and relevant export/import settings. Preserve seeds and parameters wherever the selected tool provides them.
+- Avoid hidden global randomness in custom code; repeated runs with the same inputs should produce the same result where practical.
+- Document manual steps so another person can repeat the workflow, and retain intermediate artifacts needed to reproduce the result.
+- Preserve AI outputs used in production together with available prompts, seeds, settings and model/workflow versions. Record unavailable metadata and reproducibility limits.
+- Do not rely on rerunning nondeterministic AI as the sole way to recover critical world geometry. Preserve the accepted artifacts and validate their suitability for production.
 
 ## Data safety
 
-Never perform destructive bulk operations without explicit approval.
+- Never perform destructive bulk operations without explicit approval. Before destructive changes, ensure a recoverable Git checkpoint and/or backup covering the affected data; Git alone may not cover large or untracked assets.
+- Do not modify or overwrite Source data, including original GIS inputs. Write derived data to designated Output or temporary locations.
+- Do not modify the existing Ruhnu Workbench project unless explicitly requested.
+- Do not modify files outside this repository unless the task explicitly requires it.
+- Start processing tests on a small area or dataset in an isolated test project. Inspect output before expanding the operation.
+- Keep disposable intermediates replaceable while preserving accepted production artifacts and the information needed to reproduce them.
 
-Do not modify or overwrite source GIS data.
-Do not modify the existing Ruhnu Workbench project unless explicitly requested.
-Do not modify files outside this repository unless the task explicitly requires it.
+## Development stages
 
-Generated data must go to designated Output or temporary locations.
-Intermediate data must be replaceable.
+Advance through evidence, not a fixed MVP pipeline:
 
-Before testing bulk processing:
-- use a small test dataset;
-- use a synthetic test project;
-- verify output before expanding the operation.
+- **A — Survey:** identify ready-made solutions and compare them against the required result.
+- **B — Small practical tests:** verify promising candidates with limited examples and record findings.
+- **C — Reproducible workflow:** document and demonstrate a working process, including GUI and manual steps where useful.
+- **D — Targeted automation:** automate real bottlenecks observed in the working process.
+- **E — Further development:** expand capabilities when practical use justifies them.
 
-## Development workflow
-
-Work incrementally.
-
-1. Understand the task.
-2. Identify existing solutions.
-3. Propose the simplest viable integration.
-4. Implement the smallest useful change.
-5. Add or update tests.
-6. Run tests.
-7. Report what changed and any remaining risks.
-
-Do not silently change architecture.
-Do not add large dependencies without explaining why they are needed.
-Do not add paid services when a suitable free and reliable solution exists.
-
-## MVP priority
-
-Current MVP priority:
-
-seed + parameters
--> world planning
--> evaluated terrain backend
--> backend-neutral terrain data in WorldModel
--> coastline
--> hydrology
--> basic biomes
--> reproducible output
-
-Roads, vegetation, settlements, Asset Resolver and deeper Workbench automation come later.
-
-## Human responsibilities
-
-AI assists with implementation and automation.
-
-Final artistic composition, Level Design decisions, gameplay routes and visual quality remain human-reviewed.
+For each change, implement the smallest useful increment, add or update appropriate tests, run relevant checks and report the result and remaining limitations. For tool-based workflows, practical import/export and repeatability checks may serve as validation. Do not create modules or code merely to satisfy an architectural diagram.
 
 ## Documentation
 
-Document important:
-- dependencies;
-- external tools;
-- versions;
-- assumptions;
-- input/output formats;
-- reproducibility requirements;
-- known limitations.
+Record research sources and dates, candidate comparisons, small-test results, chosen workflows and reasons for decisions. Document dependencies, external tools and versions, licenses, assumptions, input/output formats, manual steps, reproducibility requirements and known limitations.
 
-Keep README.md and Docs/ consistent with meaningful architectural changes.
+Keep README.md as a concise human-facing overview and AGENTS.md as practical agent instructions. Keep relevant Docs/ consistent when the task scope permits; if it does not, report any remaining inconsistency without editing files outside the authorized scope.
