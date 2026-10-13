@@ -59,6 +59,7 @@ within the free toolchain constraint.
 
 MacroLayout work remains useful as research, validation, physical elevation
 encoding, deterministic configuration concepts, and possibly a mock/test source.
-The existing [cross-archetype study](MacroLayout_Variability_SmokeTest.md) and
-[seed study](MacroLayout_Seed_Variability.md) establish prototype capabilities;
-they do not establish a custom production terrain engine as the chosen direction.
+The experimental MacroLayout studies do not establish a custom production terrain
+engine as the chosen direction. Only the reusable [terrain data contract](Terrain_Data_Contract.md)
+and focused encoding validation are retained on main; the experimental generator
+and study documents are not required by this contract.
