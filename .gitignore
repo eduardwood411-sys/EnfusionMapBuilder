@@ -10,6 +10,7 @@ venv/
 # IDE
 .vscode/
 .idea/
+.obsidian/
 
 # Temporary files
 *.tmp

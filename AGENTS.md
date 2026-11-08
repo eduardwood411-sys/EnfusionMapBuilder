@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Practical instructions for Codex and other AI coding agents working on Enfusion Map Builder, aligned with Enfusion Map Builder Guidelines v1.5 and the research-first approach.
+Practical instructions for Codex and other AI coding agents working on Enfusion Map Builder. The approved ChatGPT project instructions v4.2 are the primary project regulation; this file applies them to repository work. Previous Guidelines are not current rules and must not be reconstructed. Docs/EMB_Project_Instructions_v4.1.txt is a preserved previous revision, not the active regulation; do not delete or rewrite it without separate approval.
 
 ## Goal and priorities
 
@@ -15,15 +15,19 @@ Build a high-quality, reproducible, convenient and reusable process for creating
 
 ## Research before implementation
 
-For each substantial feature or automation task:
+The current stage is A–B: research and small isolated checks, with iteration, changes of direction and new candidates allowed. Documentation review, interface exploration, configuration of existing tools and small experiments require a targeted search for ready-made solutions, not a full audit of every category.
+
+Before developing or integrating any custom permanent component or production automation (including plugins, scripts, generators, importers/exporters, adapters and MCP layers), the full Audit Gate below is mandatory. A proof of concept or API test does not replace it. Temporary diagnostic commands and short one-off scripts may evaluate existing tools after a targeted search, but must not become permanent functionality before passing the gate.
+
+Audit Gate:
 
 1. Define the required result, constraints and practical acceptance criteria.
-2. Search for existing solutions before designing custom code.
+2. Search for existing solutions before designing custom code. Checking official Bohemia Interactive Samples is mandatory before developing custom permanent components.
 3. Compare eligible free candidates by result quality, maturity, reliability, reproducibility, performance, integration/maintenance effort, automation potential and portability to future games. Assess gameplay suitability as part of result quality.
 4. Run a small practical test using a limited dataset or isolated test project. Record inputs, settings, results and limitations.
 5. Select the simplest workflow supported by that evidence.
 6. Integrate, configure or adapt existing tools.
-7. Write custom code only for a confirmed gap or demonstrated bottleneck that suitable existing solutions do not address.
+7. Before writing custom code, record which ready-made solutions did not meet the criteria, why, and the minimal confirmed gap or demonstrated bottleneck that remains.
 
 Check relevant options rather than assuming a particular tool or stack:
 
@@ -70,9 +74,7 @@ GUI tools, manual intermediate steps and AI are acceptable when they provide a b
 
 ## Distribution and terrain data
 
-Maps are free to access. Donations support the author and must
-not be required for access or exclusive gameplay content.
-Verify Bohemia Interactive rules and third-party licenses.
+Maps are distributed free of charge. Voluntary support through Boosty or donations must not gate access, early versions, gameplay content or advantages. Before use and publication, verify current Bohemia Interactive / Workshop rules and licenses for the specific tools, data and assets. Do not automatically require permission for direct map sales, or assume donations are noncommercial under every license; assess the actual intended use and restrictions individually.
 
 For heightmap import, record the physical elevation range,
 sea level, resolution, orientation and import settings.
@@ -101,8 +103,11 @@ F — Custom code only for confirmed gaps.
 G — Further development based on practical results.
 
 Do not repeat successful tests without a specific reason.
+
 ## Documentation
 
 Record research sources and dates, candidate comparisons, small-test results, chosen workflows and reasons for decisions. Document dependencies, external tools and versions, licenses, assumptions, input/output formats, manual steps, reproducibility requirements and known limitations.
+
+Use Docs/EMB_Контекст_и_решения.md as project context and a concise decision log, not an additional regulation or a closed list of eligible tools. Keep accepted decisions, reported practical results and open hypotheses distinct; a tool review is not a practical test. Revisit decisions when new evidence warrants it.
 
 Keep README.md as a concise human-facing overview and AGENTS.md as practical agent instructions. Keep relevant Docs/ consistent when the task scope permits; if it does not, report any remaining inconsistency without editing files outside the authorized scope.
