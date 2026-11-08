@@ -1,6 +1,6 @@
-﻿# AGENTS.md
+# AGENTS.md
 
-Practical instructions for Codex and other AI coding agents working on Enfusion Map Builder, aligned with Enfusion Map Builder Guidelines v1.3 and the research-first approach.
+Practical instructions for Codex and other AI coding agents working on Enfusion Map Builder, aligned with Enfusion Map Builder Guidelines v1.5 and the research-first approach.
 
 ## Goal and priorities
 
@@ -68,6 +68,19 @@ GUI tools, manual intermediate steps and AI are acceptable when they provide a b
 - Preserve AI outputs used in production together with available prompts, seeds, settings and model/workflow versions. Record unavailable metadata and reproducibility limits.
 - Do not rely on rerunning nondeterministic AI as the sole way to recover critical world geometry. Preserve the accepted artifacts and validate their suitability for production.
 
+## Distribution and terrain data
+
+Maps are free to access. Donations support the author and must
+not be required for access or exclusive gameplay content.
+Verify Bohemia Interactive rules and third-party licenses.
+
+For heightmap import, record the physical elevation range,
+sea level, resolution, orientation and import settings.
+Terrain below sea level remains physical terrain.
+
+Previously tested Goldwep MCP operations do not establish
+compatibility with every later Reforger Tools version.
+LibreTerrain remains a candidate, not a mandatory backend.
 ## Data safety
 
 - Never perform destructive bulk operations without explicit approval. Before destructive changes, ensure a recoverable Git checkpoint and/or backup covering the affected data; Git alone may not cover large or untracked assets.
@@ -79,16 +92,15 @@ GUI tools, manual intermediate steps and AI are acceptable when they provide a b
 
 ## Development stages
 
-Advance through evidence, not a fixed MVP pipeline:
+A — Audit existing solutions.
+B — Small isolated practical checks.
+C — End-to-end production test.
+D — Minimal working pipeline.
+E — Targeted automation of demonstrated bottlenecks.
+F — Custom code only for confirmed gaps.
+G — Further development based on practical results.
 
-- **A — Survey:** identify ready-made solutions and compare them against the required result.
-- **B — Small practical tests:** verify promising candidates with limited examples and record findings.
-- **C — Reproducible workflow:** document and demonstrate a working process, including GUI and manual steps where useful.
-- **D — Targeted automation:** automate real bottlenecks observed in the working process.
-- **E — Further development:** expand capabilities when practical use justifies them.
-
-For each change, implement the smallest useful increment, add or update appropriate tests, run relevant checks and report the result and remaining limitations. For tool-based workflows, practical import/export and repeatability checks may serve as validation. Do not create modules or code merely to satisfy an architectural diagram.
-
+Do not repeat successful tests without a specific reason.
 ## Documentation
 
 Record research sources and dates, candidate comparisons, small-test results, chosen workflows and reasons for decisions. Document dependencies, external tools and versions, licenses, assumptions, input/output formats, manual steps, reproducibility requirements and known limitations.
